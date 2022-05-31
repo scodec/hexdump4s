@@ -1,2 +1,5 @@
 *.class
 *.log
+.bsp
+.scala-build
+hexdump4s

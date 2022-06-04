@@ -43,7 +43,7 @@ println(bytes.toHex)
 
 println(bytes.decodeAscii)
 
-println(bytes.decodeAsciiLenient)
+// println(bytes.decodeAsciiLenient)
 ```
 
 Inpsecting the hex string provides some clues about how Scala Pickling has serialized the `Line` and `Point` types. The right half of the vector shows the integers 1, 2, 3 and then 4, 5, 6, and there's a `0xfb` character preceeding each triple. The left half of the vector has a dense section of bytes mostly in the `0x50-0x80` range. Decoding the whole vector as ASCII fails, but decoding it leniently, where unmappable charaters are replaced with `�`, shows that the fully qualified class name of `Line` is included.

@@ -71,8 +71,6 @@ def dumpHexAndAscii(bs: ByteVector): Unit = {
     mkString("\n")
   println(str)
 }
-
-dumpHexAndAscii(bytes)
 ```
 
 This implementation has a problem though -- the decoded ASCII often has non-printable characters, e.g. tabs, carriage returns, backspaces. We need to replace the non-printable characters with a placeholder character.

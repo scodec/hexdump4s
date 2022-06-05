@@ -45,7 +45,7 @@ println(bytes.drop(4).take(15).decodeAsciiLenient)
 // mypackage.Line�
 ```
 
-Inpsecting the hex string provides some clues about how Scala Pickling has serialized the `Line` and `Point` types. The right half of the vector shows the integers 1, 2, 3 and then 4, 5, 6, and there's a `0xfb` character preceeding each triple. The left half of the vector has a dense section of bytes mostly in the `0x50-0x80` range. Decoding the whole vector as ASCII fails, but decoding part of it leniently, where unmappable charaters are replaced with `�`, shows that the fully qualified class name of `Line` is included.
+Inpsecting the hex string provides some clues about how Scala Pickling has serialized the `Line` and `Point` types. The right half of the vector shows the integers 1, 2, 3 and then 4, 5, 6, and there's a `0xfb` character preceeding each triple. The left half of the vector has a dense section of bytes mostly in the `0x50-0x80` range. Decoding the whole vector as ASCII fails, but decoding it leniently, where unmappable charaters are replaced with `�`, shows that the fully qualified class name of `Line` is included.
 
 We can do more experiments in a similar way -- e.g., changing one of the paramters to one of our `Point` instances and comparing the hex output to the original output, confirming the change occurs where we expect. We may also want to use `drop` and `take` and other operations on `ByteVector` when exploring the example output. To assist with visual inspection of the results, let's define a utility function to print a hex dump with 16 bytes per line.
 
@@ -66,25 +66,24 @@ Despite using scodec for nearly a decade, working with a wide variety of binary 
 For example, we can add another column to the output with the decoded ASCII of each line:
 
 ```scala
-def dumpHexAndAscii(bs: ByteVector): Unit = {
+def dumpHexAndAscii(bs: ByteVector): Unit =
   val str = bs.
     grouped(16).
     map(line => line.toHex + " " + line.decodeAsciiLenient).
     mkString("\n")
   println(str)
-}
 ```
 
 This implementation has a problem though -- the decoded ASCII often has non-printable characters, e.g. tabs, carriage returns, backspaces. We need to replace the non-printable characters with a placeholder character.
 
 ```scala
 val NonPrintablePattern = "[^�\\p{Print}]".r
-// NonPrintablePattern: util.matching.Regex = [^�\p{Print}]
+// NonPrintablePattern: Regex = [^�\p{Print}]
 
 def printable(s: String): String = 
   NonPrintablePattern.replaceAllIn(s, ".")
 
-def dumpHexAndPrintableAscii(bs: ByteVector): Unit = {
+def dumpHexAndPrintableAscii(bs: ByteVector): Unit =
   val str = bs.
     grouped(16).
     map { line => 
@@ -92,7 +91,6 @@ def dumpHexAndPrintableAscii(bs: ByteVector): Unit = {
     }.
     mkString("\n")
   println(str)
-}
 
 dumpHexAndPrintableAscii(bytes)
 // 0000000e6d797061636b6167652e4c69 ....mypackage.Li
@@ -103,7 +101,7 @@ dumpHexAndPrintableAscii(bytes)
 This is close, but the ASCII column in the last line is not aligned with the previous lines. Let's fix that while also adding an address column at the start of each line, specifying the index of the byte the line starts with.
 
 ```scala
-def dumpHex(bs: ByteVector): Unit = {
+def dumpHex(bs: ByteVector): Unit =
   val str = bs.
     grouped(16).
     zipWithIndex.
@@ -116,10 +114,83 @@ def dumpHex(bs: ByteVector): Unit = {
     }.
     mkString("\n")
   println(str)
-}
 
 dumpHex(bytes)
 // 00000000 0000000e6d797061636b6167652e4c69 ....mypackage.Li
 // 00000010 6e65fb000000010000000200000003fb ne�............�
 // 00000020 000000040000000500000006         ............
+```
+
+With this new `dumpHex` routine, let's look at a couple more examples of pickling.
+
+```scala
+val p = Point(7, 8, 9)
+val bytesPoint = ByteVector.view(p.pickle.value)
+```
+```scala
+dumpHex(bytesPoint)
+// 00000000 0000000f6d797061636b6167652e506f ....mypackage.Po
+// 00000010 696e74000000070000000800000009   int............
+```
+
+This time, we can see the fully qualified class name of `Point` appear in the pickled output, unlike when we pickled `Line`, which only included the fully qualified class name of `Line`.
+
+Let's also look at the first 4 bytes -- `0x0000000f` -- or 15 in decimal. This is the length of the string `mypackage.Point`. In the pickled output of `Line` from earlier, we similarly see the first 4 bytes are `0x0000000e`, or 14 decimal, which is the length of the string `mypackage.Line`.
+
+There are two reasonable guesses we can make here about the Scala Pickling binary format:
+* Strings are encoded as a 4-byte integer, specifying the number of subsequent bytes to read, followed by a UTF-8 (or perhaps ASCII) encoding of the string.
+* Pickling an object results in the fully qualified class name of the object being encoded as a string.
+
+The scodec library provides a built-in codec for UTF-8 strings prefixed by a 32-bit integer size field:
+
+```scala
+import scodec.codecs._
+
+println(utf8_32.encode("Hello, world!"))
+// Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
+```
+
+The `utf8_32` codec is an alias for `variableSizeBytes(int32, utf8)` -- The `variableSizeBytes` operation builds a codec from a size codec and a value code. The size codec specifies the format of the size of the value in bytes and the value codec subsequently only sees the specified number of bytes from the input.
+
+When we decode a pickled value, we don't really want to do anything with the resulting string that specifies a class name. Rather, we want to write a codec for a specific class -- e.g. `Point` or `Line` -- where we know the input should start with the fully qualified class name. Let's define this.
+
+```scala
+import scodec.Codec
+
+def constantString(s: String): Codec[Unit] =
+  utf8_32.unit(s)
+
+val helloWorld = constantString("Hello, world!")
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@110940d4
+
+println(helloWorld.encode(()))
+// Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
+```
+
+Looking back at the pickled version of `Point`, we see that after the fully qualified class name, the 3 component integers are encoded sequentially as 32-bit big endian values. We can build a codec for this format using scodec's built-in `int32` codec three successive times.
+
+```scala
+val pointComponents: Codec[(Int, Int, Int)] = int32 :: int32 :: int32
+// pointComponents: Codec[Tuple3[Int, Int, Int]] = 32-bit signed integer :: 32-bit signed integer :: 32-bit signed integer
+
+println(pointComponents.encode(1, 2, 3))
+// Successful(BitVector(96 bits, 0x000000010000000200000003))
+```
+
+We can combine this with `constantString` to build a codec for `Point`:
+
+```scala
+val pointCodec =
+  (constantString("mypackage.Point") ~> int32 :: int32 :: int32).as[Point]
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@676b63f0
+
+println(pointCodec.decode(bytesPoint.bits))
+// Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
+```
+
+And this same codec can generate binary output that's readable by Scala Pickling:
+
+```scala
+println(pointCodec.encode(Point(7, 8, 9)))
+// Successful(BitVector(248 bits, 0x0000000f6d797061636b6167652e506f696e74000000070000000800000009))
 ```

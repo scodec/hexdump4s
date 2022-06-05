@@ -3,3 +3,7 @@
 .bsp
 .scala-build
 hexdump4s
+target
+*.swp
+.metals
+.vscode

@@ -190,9 +190,31 @@ dumpHex(bytes)
 Before each of the points, there's a `0xfb` character, and there's no appearance of the fully qualified class name of `Point`. It seems that when Scala Pickling has enough context to know the type of the next field in the binary, it elides type information. A quick scan through the Scala Pickling source shows [some constant byte tags](https://github.com/scala/pickling/blob/f7c64bc11f11e78e80ff326da9fbc4fa8d045a80/core/src/main/scala/scala/pickling/binary/BinaryPickleFormat.scala#L32) and confirms `0xfb` is the elided tag.
 
 ```scala mdoc
-val pointElidedCodec = constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
+val pointElidedCodec =
+  constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
 
-val lineCodec = constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
+val lineCodec =
+  constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
 
 println(lineCodec.decode(bytes.bits))
+```
+
+Let's look at the binary format of one more type, `State`, which stores a list of lines:
+
+```scala
+case class State(lines: List[Line])
+
+val s = State(List(
+  Line(Point(1, 2, 3), Point(4, 5, 6)),
+  Line(Point(7, 8, 9), Point(10, 11, 12))
+))
+
+val bytesState = ByteVector.view(s.pickle.value)
+```
+```scala mdoc:invisible
+case class State(lines: List[Line])
+val bytesState = hex"0000000f6d797061636b6167652e5374617465000000377363616c612e636f6c6c656374696f6e2e696d6d757461626c652e24636f6c6f6e24636f6c6f6e5b6d797061636b6167652e4c696e655dfbfb000000010000000200000003fb000000040000000500000006000000377363616c612e636f6c6c656374696f6e2e696d6d757461626c652e24636f6c6f6e24636f6c6f6e5b6d797061636b6167652e4c696e655dfbfb000000070000000800000009fb0000000a0000000b0000000c000000237363616c612e636f6c6c656374696f6e2e696d6d757461626c652e4e696c2e74797065"
+```
+```scala mdoc
+dumpHex(bytesState)
 ```

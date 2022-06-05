@@ -161,7 +161,7 @@ def constantString(s: String): Codec[Unit] =
   utf8_32.unit(s)
 
 val helloWorld = constantString("Hello, world!")
-// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@5693a2c0
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@64aa2433
 
 println(helloWorld.encode(()))
 // Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
@@ -182,7 +182,7 @@ We can combine this with `constantString` to build a codec for `Point`:
 ```scala
 val pointCodec =
   constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
-// pointCodec: Codec[Point] = scodec.Codec$$anon$2@71a59280
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@15b9e3a7
 
 println(pointCodec.decode(bytesPoint.bits))
 // Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
@@ -207,12 +207,45 @@ dumpHex(bytes)
 Before each of the points, there's a `0xfb` character, and there's no appearance of the fully qualified class name of `Point`. It seems that when Scala Pickling has enough context to know the type of the next field in the binary, it elides type information. A quick scan through the Scala Pickling source shows [some constant byte tags](https://github.com/scala/pickling/blob/f7c64bc11f11e78e80ff326da9fbc4fa8d045a80/core/src/main/scala/scala/pickling/binary/BinaryPickleFormat.scala#L32) and confirms `0xfb` is the elided tag.
 
 ```scala
-val pointElidedCodec = constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
-// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@3d64d06d
+val pointElidedCodec =
+  constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
+// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@169f751b
 
-val lineCodec = constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
-// lineCodec: Codec[Line] = scodec.Codec$$anon$2@5fb3a462
+val lineCodec =
+  constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
+// lineCodec: Codec[Line] = scodec.Codec$$anon$2@588355c7
 
 println(lineCodec.decode(bytes.bits))
 // Successful(DecodeResult(Line(Point(1,2,3),Point(4,5,6)),BitVector(empty)))
+```
+
+Let's look at the binary format of one more type, `State`, which stores a list of lines:
+
+```scala
+case class State(lines: List[Line])
+
+val s = State(List(
+  Line(Point(1, 2, 3), Point(4, 5, 6)),
+  Line(Point(7, 8, 9), Point(10, 11, 12))
+))
+
+val bytesState = ByteVector.view(s.pickle.value)
+```
+```scala
+dumpHex(bytesState)
+// 00000000 0000000f6d797061636b6167652e5374 ....mypackage.St
+// 00000010 617465000000377363616c612e636f6c ate...7scala.col
+// 00000020 6c656374696f6e2e696d6d757461626c lection.immutabl
+// 00000030 652e24636f6c6f6e24636f6c6f6e5b6d e.$colon$colon[m
+// 00000040 797061636b6167652e4c696e655dfbfb ypackage.Line]��
+// 00000050 000000010000000200000003fb000000 ............�...
+// 00000060 04000000050000000600000037736361 ............7sca
+// 00000070 6c612e636f6c6c656374696f6e2e696d la.collection.im
+// 00000080 6d757461626c652e24636f6c6f6e2463 mutable.$colon$c
+// 00000090 6f6c6f6e5b6d797061636b6167652e4c olon[mypackage.L
+// 000000a0 696e655dfbfb00000007000000080000 ine]��..........
+// 000000b0 0009fb0000000a0000000b0000000c00 ..�.............
+// 000000c0 0000237363616c612e636f6c6c656374 ..#scala.collect
+// 000000d0 696f6e2e696d6d757461626c652e4e69 ion.immutable.Ni
+// 000000e0 6c2e74797065                     l.type
 ```

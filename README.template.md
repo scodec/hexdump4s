@@ -170,7 +170,7 @@ We can combine this with `constantString` to build a codec for `Point`:
 
 ```scala mdoc
 val pointCodec =
-  (constantString("mypackage.Point") ~> int32 :: int32 :: int32).as[Point]
+  constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
 
 println(pointCodec.decode(bytesPoint.bits))
 ```
@@ -179,4 +179,20 @@ And this same codec can generate binary output that's readable by Scala Pickling
 
 ```scala mdoc
 println(pointCodec.encode(Point(7, 8, 9)))
+```
+
+Let's look back at the pickled `Line` example now:
+
+```scala mdoc
+dumpHex(bytes)
+```
+
+Before each of the points, there's a `0xfb` character, and there's no appearance of the fully qualified class name of `Point`. It seems that when Scala Pickling has enough context to know the type of the next field in the binary, it elides type information. A quick scan through the Scala Pickling source shows [some constant byte tags](https://github.com/scala/pickling/blob/f7c64bc11f11e78e80ff326da9fbc4fa8d045a80/core/src/main/scala/scala/pickling/binary/BinaryPickleFormat.scala#L32) and confirms `0xfb` is the elided tag.
+
+```scala mdoc
+val pointElidedCodec = constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
+
+val lineCodec = constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
+
+println(lineCodec.decode(bytes.bits))
 ```

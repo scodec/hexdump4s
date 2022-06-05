@@ -161,7 +161,7 @@ def constantString(s: String): Codec[Unit] =
   utf8_32.unit(s)
 
 val helloWorld = constantString("Hello, world!")
-// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@110940d4
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@5693a2c0
 
 println(helloWorld.encode(()))
 // Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
@@ -181,8 +181,8 @@ We can combine this with `constantString` to build a codec for `Point`:
 
 ```scala
 val pointCodec =
-  (constantString("mypackage.Point") ~> int32 :: int32 :: int32).as[Point]
-// pointCodec: Codec[Point] = scodec.Codec$$anon$2@676b63f0
+  constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@71a59280
 
 println(pointCodec.decode(bytesPoint.bits))
 // Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
@@ -193,4 +193,26 @@ And this same codec can generate binary output that's readable by Scala Pickling
 ```scala
 println(pointCodec.encode(Point(7, 8, 9)))
 // Successful(BitVector(248 bits, 0x0000000f6d797061636b6167652e506f696e74000000070000000800000009))
+```
+
+Let's look back at the pickled `Line` example now:
+
+```scala
+dumpHex(bytes)
+// 00000000 0000000e6d797061636b6167652e4c69 ....mypackage.Li
+// 00000010 6e65fb000000010000000200000003fb ne�............�
+// 00000020 000000040000000500000006         ............
+```
+
+Before each of the points, there's a `0xfb` character, and there's no appearance of the fully qualified class name of `Point`. It seems that when Scala Pickling has enough context to know the type of the next field in the binary, it elides type information. A quick scan through the Scala Pickling source shows [some constant byte tags](https://github.com/scala/pickling/blob/f7c64bc11f11e78e80ff326da9fbc4fa8d045a80/core/src/main/scala/scala/pickling/binary/BinaryPickleFormat.scala#L32) and confirms `0xfb` is the elided tag.
+
+```scala
+val pointElidedCodec = constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
+// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@3d64d06d
+
+val lineCodec = constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
+// lineCodec: Codec[Line] = scodec.Codec$$anon$2@5fb3a462
+
+println(lineCodec.decode(bytes.bits))
+// Successful(DecodeResult(Line(Point(1,2,3),Point(4,5,6)),BitVector(empty)))
 ```

@@ -59,7 +59,7 @@ dumpHexBasic(bytes)
 
 The `grouped` operation does most of the heavy lifting here -- `grouped` converts a `ByteVector` in to an `Iterator[ByteVector]`, where each inner vector is the specified number of bytes, except the last vector which may be less.
 
-Despite using scodec for nearly a decade, working with a wide variety of binary protocols, and writing variants of this function dozens of times, it doesn't exist directly in the library. We can add a variety of useful features to this function -- features that we wouldn't take the time to define in an adhoc debugging session but would be very useful.
+Despite using scodec for nearly a decade, working with a wide variety of binary protocols, and writing variants of this function dozens of times, it doesn't exist directly in the library (or rather, didn't exist until it was added as part of this article). We can add a variety of useful features to this function -- features that we wouldn't take the time to define in an adhoc debugging session but would be very useful.
 
 For example, we can add another column to the output with the decoded ASCII of each line:
 
@@ -159,7 +159,7 @@ def constantString(s: String): Codec[Unit] =
   utf8_32.unit(s)
 
 val helloWorld = constantString("Hello, world!")
-// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@77a27356
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@5536542e
 
 println(helloWorld.encode(()))
 // Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
@@ -180,7 +180,7 @@ We can combine this with `constantString` to build a codec for `Point`:
 ```scala
 val pointCodec =
   constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
-// pointCodec: Codec[Point] = scodec.Codec$$anon$2@73c21b13
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@77a27356
 
 println(pointCodec.decode(bytesPoint.bits))
 // Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
@@ -207,11 +207,11 @@ Before each of the points, there's a `0xfb` character, and there's no appearance
 ```scala
 val pointElidedCodec =
   constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
-// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@66e6e5e9
+// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@73c21b13
 
 val lineCodec =
   constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
-// lineCodec: Codec[Line] = scodec.Codec$$anon$2@1964a3f
+// lineCodec: Codec[Line] = scodec.Codec$$anon$2@66e6e5e9
 
 println(lineCodec.decode(bytes.bits))
 // Successful(DecodeResult(Line(Point(1,2,3),Point(4,5,6)),BitVector(empty)))
@@ -244,7 +244,7 @@ Here we see the expected `myPackage.State` string, followed by an elided type ta
 
 ```scala
 val stateCodec = constantString("mypackage.State") ~> constant(0xfb) ~> vectorOfN(int32, lineCodec)
-// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@654ab198
+// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@1964a3f
 
 println(stateCodec.decode(bytesState.bits))
 // Successful(DecodeResult(Vector(Line(Point(1,2,3),Point(4,5,6)), Line(Point(7,8,9),Point(10,11,12))),BitVector(empty)))
@@ -495,7 +495,7 @@ Now that we have configurable hex dumps, let's build a command line application 
 
 `HexDumpFormat` exists in recent versions of scodec-bits (it was added as a result of the effort described in this article). We'll use the amazing [decline](https://github.com/bkirwi/decline) library for parsing the command line arguments. Further, we'll write this application as a [scala-cli](https://scala-cli.virtuslab.org) script.
 
-To get started, we'll create `hexdump4s.sc` and setup the Scala version (2.13 currently, as Decline is not yet available for Scala 3) as well as our library dependencies -- scodec-bits and decline.
+To get started, we'll create `hexdump4s.sc` and setup the Scala version (2.13 currently, as we'll be using Scala Native later and there's [not yet a release for Cats for Scala Native](https://github.com/typelevel/cats/pull/4228), which is a dependency of Decline) as well as our library dependencies -- scodec-bits and decline.
 
 ```scala
 //> using scala "2.13.8"

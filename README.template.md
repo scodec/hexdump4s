@@ -202,9 +202,9 @@ println(lineCodec.decode(bytes.bits))
 Let's look at the binary format of one more type, `State`, which stores a list of lines:
 
 ```scala
-case class State(lines: List[Line])
+case class State(lines: Vector[Line])
 
-val s = State(List(
+val s = State(Vector(
   Line(Point(1, 2, 3), Point(4, 5, 6)),
   Line(Point(7, 8, 9), Point(10, 11, 12))
 ))
@@ -213,8 +213,184 @@ val bytesState = ByteVector.view(s.pickle.value)
 ```
 ```scala mdoc:invisible
 case class State(lines: List[Line])
-val bytesState = hex"0000000f6d797061636b6167652e5374617465000000377363616c612e636f6c6c656374696f6e2e696d6d757461626c652e24636f6c6f6e24636f6c6f6e5b6d797061636b6167652e4c696e655dfbfb000000010000000200000003fb000000040000000500000006000000377363616c612e636f6c6c656374696f6e2e696d6d757461626c652e24636f6c6f6e24636f6c6f6e5b6d797061636b6167652e4c696e655dfbfb000000070000000800000009fb0000000a0000000b0000000c000000237363616c612e636f6c6c656374696f6e2e696d6d757461626c652e4e696c2e74797065"
+val bytesState = hex"0000000f6d797061636b6167652e5374617465fb000000020000000e6d797061636b6167652e4c696e65fb000000010000000200000003fb0000000400000005000000060000000e6d797061636b6167652e4c696e65fb000000070000000800000009fb0000000a0000000b0000000c"
 ```
 ```scala mdoc
 dumpHex(bytesState)
 ```
+
+Here we see the expected `myPackage.State` string, followed by an elided type tag, then a 32-bit integer field specifying the number of elements in the vector. After the count field, there's two successive lines, both encoded with their fully qualified class name, not an elided type tag.
+
+```scala mdoc
+val stateCodec = constantString("mypackage.State") ~> constant(0xfb) ~> vectorOfN(int32, lineCodec)
+
+println(stateCodec.decode(bytesState.bits))
+```
+
+Using `dumpHex`, we can continue to experiment with pickling more complex types and build up various codecs. For instance, serializing `Option` values, other collection types, and so on. For the rest of this article, we'll instead focus on improving `dumpHex`.
+
+## Configurable hex dumps
+
+Let's return to `dumpHex` and consider other features we might want. For inspiration, we can look at the [man page of Linux's hexdump](https://man7.org/linux/man-pages/man1/hexdump.1.html). What we've built so far loosely resembles the output of `hexdump -C`, with an address column, hex data column, and ASCII column. Let's support the following additional features:
+- Improve formatting by using something similar to `hexdump`'s output.  Hex data will be organized in to 8 byte columns, with each byte separated by a space, and with each column separated by an additional space. We'll also add a border around the ASCII column.
+- Support a configurable number of columns of data and number of bytes per column, using a default of 2 columns of 8 bytes each.
+- Support suppressing the output of the address and/or ASCII column.
+- Support customizing the hexadecimal alphabet (e.g. lowercase versus uppercase).
+
+We could modify `dumpHex` to take a bunch of parameters with defaults, but this has a couple disadvantages. First, it makes it difficult to maintain binary compatibility if in a future version we want to add new configuration options. Second, it doesn't let us treat various combinations of settings as *values*. For instance, we may want to have a value that represents the default format and another that represents the format without the ASCII column. We can also use such values as starting points for futher customizations. We could represent a bunch of parameters with a case class, and various preconfigured parameter sets as values in the companion object of that case class. But we'd still have binary compatibility issues -- e.g., adding a parameter to the case class would not be binary compatible. Instead, the builder pattern aligns well with our requirements.
+
+```scala
+final class HexDumpFormat private (
+    val includeAddressColumn: Boolean,
+    val dataColumnCount: Int,
+    val dataColumnWidthInBytes: Int,
+    val includeAsciiColumn: Boolean,
+    val alphabet: Bases.HexAlphabet
+):
+
+  def withIncludeAddressColumn(newIncludeAddressColumn: Boolean): HexDumpFormat =
+    new HexDumpFormat(
+      newIncludeAddressColumn,
+      dataColumnCount,
+      dataColumnWidthInBytes,
+      includeAsciiColumn,
+      alphabet
+    )
+
+  def withDataColumnCount(newDataColumnCount: Int): HexDumpFormat =
+    new HexDumpFormat(
+      includeAddressColumn,
+      newDataColumnCount,
+      dataColumnWidthInBytes,
+      includeAsciiColumn,
+      alphabet
+    )
+
+  // Additional builder methods for each parameter...
+
+object HexDumpFormat:
+  val Default: HexDumpFormat =
+    new HexDumpFormat(true, 2, 8, true, Bases.Alphabets.HexLowercase)
+
+  /** Like [[Default]] but with 3 columns of data and no ASCII column. */
+  val NoAscii: HexDumpFormat =
+    Default.withIncludeAsciiColumn(false).withDataColumnCount(3)
+```
+
+We can then add various methods to the `HexDumpFormat` class for rending a hex dump:
+
+```scala
+def render(bytes: ByteVector): String =
+  val bldr = new StringBuilder
+  render(bytes, line => { bldr.append(line); () })
+  bldr.toString
+
+def render(bytes: ByteVector, onLine: String => Unit): Unit =
+  val numBytesPerLine = dataColumnWidthInBytes * dataColumnCount
+  val bytesPerLine = bytes.grouped(numBytesPerLine.toLong)
+  bytesPerLine.zipWithIndex.foreach { case (bytesInLine, index) =>
+    val line = renderLine(bldr, bytesInLine, index * numBytesPerLine)
+    onLine(line)
+  }
+
+def renderLine(bytes: ByteVector, address: Int): String =
+  ???
+
+def print(bytes: ByteVector): Unit =
+  render(bytes, line => Console.print(line))
+```
+
+This probably seems like a strange collection of methods. Why not just a single `def render(bytes: ByteVector): String`? Most of the time we render a hex dump, we're immediately going to print it (or perhaps log it). If we only had a single `render` method that returned a string, then when rendering a large input vector, we'd have to accumulate the entire rendering in to a single string before printing any of the output. But printing can be done incrementally -- a line at a time. There's no need to accumulate all of those lines in memory before printing anything!
+
+Now let's look at the implementation of `renderLine`:
+
+```scala
+def renderLine(bytes: ByteVector, address: Int): String =
+  val bldr = new StringBuilder
+  if includeAddressColumn then
+    bldr
+      .append(ByteVector.fromInt(address).toHex(alphabet))
+      .append("  ")
+  bytes.grouped(dataColumnWidthInBytes.toLong).foreach { columnBytes =>
+    renderHex(bldr, columnBytes)
+    bldr.append(" ")
+  }
+  if includeAsciiColumn then
+    val padding =
+      val bytesOnThisLine = bytes.size.toInt
+      val dataBytePadding = (numBytesPerLine - bytesOnThisLine) * 3 - 1
+      val numFullDataColumns = (bytesOnThisLine - 1) / dataColumnWidthInBytes
+      val numAdditionalColumnSpacers = dataColumnCount - numFullDataColumns
+      dataBytePadding + numAdditionalColumnSpacers
+    bldr
+      .append(" " * padding)
+      .append('│')
+      .append(printable(bytes.decodeAsciiLenient))
+      .append('│')
+  bldr
+    .append('\n')
+    .toString
+
+def renderHex(bldr: StringBuilder, bytes: ByteVector): Unit =
+  bytes.foreachS { b =>
+    bldr
+      .append(alphabet.toChar((b >> 4 & 0x0f).toByte.toInt))
+      .append(alphabet.toChar((b & 0x0f).toByte.toInt))
+      .append(' ')
+    ()
+  }
+```
+
+There's a lot of code here, though it's mostly straightforward. We create a `StringBuilder` for the line, append the various columns, and return a single string. The input `bytes` parameter only consists of the bytes for this line (16 by default). The implementation groups these bytes by the number of bytes per column, resulting in a sub-vector for each data column. The most complicated bit is calculating the number of padding characters between the final byte and the start of the ASCII column, in the case where the byte length is not evenly divisible by the number of bytes per line.
+
+We also needed to define `renderHex` instead of using the built-in `toHex` on `ByteVector` as a result of adding a space after each byte.
+
+## Colorized hex dumps
+
+Most of the time, hex dumps get printed to the console. We can improve that experience by adding color to the output via [ANSI escape codes](https://en.wikipedia.org/wiki/ANSI_escape_code). We'll need to conditionally enable/disable ANSI in the output in order to support use cases like writing hex dumps to logs or working with terminals that don't have ANSI support, so we let's add an `ansiEnabled` flag to `HexDumpFormat` and modify our rendering functions to use ANSI where appropriate.
+
+For starters, let's de-emphasize both the address column and unmappable / non-printable characters in the ASCII column, which will bring more visual attention to the data. We can use the "faint" attribute of the ANSI Select Graphic Rendition parameter set to accomplish this. To enable the faint attribute, we must output the sequence `"\u001b[;2m"`. Then to disable the faint attribute and restore the attributes to normal, we must output the sequence `"\u001b[;22m"`.
+
+Enabling the faint attribute on the address column is then accomplished by simply writing the faint sequence prior to writing the address and then writing the reset sequence afterwards:
+
+```scala
+object Ansi:
+  val Faint = "\u001b[;2m"
+  val Normal = "\u001b[;22m"
+
+def renderLine(bytes: ByteVector, address: Int): String =
+  val bldr = new StringBuilder
+  if includeAddressColumn then
+    if ansiEnabled then bldr.append(Ansi.Faint)
+    bldr.append(ByteVector.fromInt(address).toHex(alphabet))
+    if ansiEnabled then bldr.append(Ansi.Normal)
+    bldr.append("  ")
+  ...
+```
+
+Rendering unmappable and non-printable ASCII faintly can be accomplished with some regular expression replacements:
+
+```scala
+val FaintDot = s"${Ansi.Faint}.${Ansi.Normal}"
+val FaintUnmappable = s"${Ansi.Faint}�${Ansi.Normal}"
+
+def renderAsciiBestEffort(bldr: StringBuilder, bytes: ByteVector): Unit =
+  val decoded = bytes.decodeAsciiLenient
+  val nonPrintableReplacement = if ansiEnabled then FaintDot else "."
+  val printable = NonPrintablePattern.replaceAllIn(decoded, nonPrintableReplacement)
+  val colorized = if ansiEnabled then printable.replaceAll("�", FaintUnmappable) else printable
+  bldr.append(colorized)
+  ()
+```
+
+## Building a command line app
+
+TODO
+## Scala Native
+
+TODO
+## Streaming
+
+TODO
+
+TODO: Why the `BitVector` variants though? `BitVector` supports *suspended construction* -- i.e., constructing the vector as it is traversed instead of constructing it all at once. Operations like `BitVector.fromInputStream` take advantage of this to avoid loading the entire input. However, when a `BitVector` is converted to a `ByteVector`, the suspensions are forced, resulting in all data being loaded in to memory. By implementing the main algorithm in terms of `BitVector`, we avoid forcing the entire computation.

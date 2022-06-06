@@ -1,5 +1,5 @@
 //> using scala "2.13.8"
-//> using lib "org.scodec::scodec-bits::1.1.33"
+//> using lib "org.scodec::scodec-bits::1.1.34"
 //> using lib "com.monovore::decline::2.2.0"
 //
 // Build with: scala-cli package --native hexdump4s.sc -o hexdump4s -f
@@ -26,12 +26,14 @@ command.parse(args) match {
   case Left(help) =>
     System.err.println(help)
   case Right((offset, limit, noColor, file)) =>
-    val data = BitVector.fromInputStream(
-      file.map(f => Files.newInputStream(f)).getOrElse(System.in))
-    val dropped = data.drop(offset * 8L)
-    val windowed = limit.map(l => dropped.take(l * 8L)).getOrElse(dropped)
+    def data = {
+      val source = BitVector.fromInputStream(
+        file.map(f => Files.newInputStream(f)).getOrElse(System.in))
+      source.drop(offset * 8L)
+    }
     HexDumpFormat.Default
-      .withAddressOffset(offset.toInt)
       .withAnsi(!noColor)
-      .print(windowed)
+      .withAddressOffset(offset.toInt)
+      .withLengthLimit(limit.getOrElse(Long.MaxValue))
+      .print(data)
 }

@@ -7,7 +7,7 @@ import scodec.bits.ByteVector
 case class Point(x: Int, y: Int, z: Int)
 case class Line(start: Point, end: Point)
 
-case class State(lines: List[Line])
+case class State(lines: Vector[Line])
 
 object Main extends App {
   val p = Line(Point(1, 2, 3), Point(4, 5, 6))
@@ -18,7 +18,7 @@ object Main extends App {
   val bytes2 = ByteVector.view(p2.pickle.value)
   println(bytes2.toHex)
 
-  val s = State(List(
+  val s = State(Vector(
     Line(Point(1, 2, 3), Point(4, 5, 6)),
     Line(Point(7, 8, 9), Point(10, 11, 12))
   ))

@@ -10,7 +10,7 @@ Instead, we could store the new binary format in new tables while keeping the sc
 
 For this particular application, neither of these options were desirable. Instead, we wanted to continue to read and write cluster state in the existing binary format while also upgrading to modern Scala releases. To do so, we decided to reverse engineer the scala-pickling binary format with [scodec](https://scodec.org). In the process, we added hex dump support to scodec and built a native application using [scala-cli](https://scala-cli.virtuslab.org). In this article, we'll explore how this was done.
 
-# Scala Pickling
+## Scala Pickling
 
 The Scala Pickling library supports compile time generation of binary encoders and decoders (JSON is also supported, though we're not using it here). Consider the type `Line`, which consists of two `Point`s:
 
@@ -161,7 +161,7 @@ def constantString(s: String): Codec[Unit] =
   utf8_32.unit(s)
 
 val helloWorld = constantString("Hello, world!")
-// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@905467b
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@5536542e
 
 println(helloWorld.encode(()))
 // Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
@@ -182,7 +182,7 @@ We can combine this with `constantString` to build a codec for `Point`:
 ```scala
 val pointCodec =
   constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
-// pointCodec: Codec[Point] = scodec.Codec$$anon$2@3cfcadb8
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@77a27356
 
 println(pointCodec.decode(bytesPoint.bits))
 // Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
@@ -209,11 +209,11 @@ Before each of the points, there's a `0xfb` character, and there's no appearance
 ```scala
 val pointElidedCodec =
   constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
-// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@6ddac9ff
+// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@73c21b13
 
 val lineCodec =
   constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
-// lineCodec: Codec[Line] = scodec.Codec$$anon$2@7470d3d1
+// lineCodec: Codec[Line] = scodec.Codec$$anon$2@66e6e5e9
 
 println(lineCodec.decode(bytes.bits))
 // Successful(DecodeResult(Line(Point(1,2,3),Point(4,5,6)),BitVector(empty)))
@@ -246,7 +246,7 @@ Here we see the expected `myPackage.State` string, followed by an elided type ta
 
 ```scala
 val stateCodec = constantString("mypackage.State") ~> constant(0xfb) ~> vectorOfN(int32, lineCodec)
-// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@576575ba
+// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@1964a3f
 
 println(stateCodec.decode(bytesState.bits))
 // Successful(DecodeResult(Vector(Line(Point(1,2,3),Point(4,5,6)), Line(Point(7,8,9),Point(10,11,12))),BitVector(empty)))
@@ -495,9 +495,9 @@ Now that we have configurable hex dumps, let's build a command line application 
 - support skipping to an offset of the input
 - support limiting byte output
 
-We'll use the amazing [decline](https://github.com/bkirwi/decline) library for parsing the command line arguments. Further, we'll write this application as a [scala-cli](https://scala-cli.virtuslab.org) script.
+`HexDumpFormat` exists in recent versions of scodec-bits (it was added as a result of the effort described in this article). We'll use the amazing [decline](https://github.com/bkirwi/decline) library for parsing the command line arguments. Further, we'll write this application as a [scala-cli](https://scala-cli.virtuslab.org) script.
 
-To get started, we'll create `hexdump4s.sc` and setup the Scala version (2.13 currently, as Decline is not yet available for Scala 3) as well as our library dependencies.
+To get started, we'll create `hexdump4s.sc` and setup the Scala version (2.13 currently, as Decline is not yet available for Scala 3) as well as our library dependencies -- scodec-bits and decline.
 
 ```scala
 //> using scala "2.13.8"
@@ -534,13 +534,200 @@ command.parse(args) match {
 }
 ```
 
+The command definition describes the various options, flags, and arguments to `hexdump4s`. We construct each using an appropriate method on `Opts` and then combine them all in to a single option via `.tupled`. When we used the resulting command to parse the arguments to our script, we either get a `Left` containing help text or a `Right` containing the parsed arguments. Let's try running this script with `--help`:
 
+```
+> scala-cli run hexdump4s.sc -- --help
+Usage: hexdump4s [--offset <count>] [--length <count>] [--no-color] [<file>]
+
+Prints a hex dump of a file
+
+Options and flags:
+    --help
+        Display this help text.
+    --offset <count>, -s <count>
+        Number of bytes to skip at start of input
+    --length <count>, -n <count>
+        Number of bytes to dump
+    --no-color
+        Disables color ouptut
+```
+
+We're using `scala-cli run` to run the script. The `--` tells scala-cli that what comes after are arguments for the script (as opposed to arguments to `scala-cli`).
+
+The help text was automatically generated by Decline as a result of the various options we passed when constructing the `Command` value. If the arguments parse successfully, we get `offset` and `limit` as `Long` values, `noColor` as a boolean, and `file` as an `Option[Path]`. We then just need to construct a data source from the specified path, if defined, or otherwise from standard input, and configure a `HexDumpFormat`.
+
+```
+command.parse(args) match {
+  case Left(help) =>
+    System.err.println(help)
+  case Right((offset, limit, noColor, file)) =>
+    val data = {
+      val source = BitVector.fromInputStream(
+        file.map(f => Files.newInputStream(f)).getOrElse(System.in))
+      source
+        .drop(offset * 8L)
+        .take(limit.map(_ * 8L).getOrElse(Long.MaxValue))
+    }
+    HexDumpFormat.Default
+      .withAnsi(!noColor)
+      .withAddressOffset(offset.toInt)
+      .print(data)
+}
+```
+
+The `BitVector.fromInputStream` constructor is used to load the data, either from a file or from standard input. And we're using the `withAddressFormat` option of `HexDumpFormat` here, which we haven't yet discussed. It lets us specify the address of the first byte in the vector. Without it, if we simply dropped the requested number of bytes from the input, we'd erroneously start the address column at `00000000`.
 
 ## Scala Native
 
-TODO
+scala-cli supports compiling scripts with the [Scala Native](https://scala-native.readthedocs.io/en/latest/) compiler, as long as all dependencies have been published with native support. Both scodec-bits and decline support native, so we can compile this script to a native executable:
+
+```
+> scala-cli package --native hexdump4s.sc -o hexdump4s -f
+```
+
+One huge benefit of doing so is improved startup time. Running `hexdump4s` natively versus as a JVM script shows a huge difference:
+
+```
+> time ./hexdump4s hexdump4s.sc > /dev/null
+
+________________________________________________________
+Executed in   75.82 millis    fish           external
+   usr time   31.55 millis    0.23 millis   31.32 millis
+   sys time   25.42 millis    8.68 millis   16.74 millis
+
+> time scala-cli run hexdump4s.scala -- hexdump4s.sc > /dev/null
+
+________________________________________________________
+Executed in    2.87 secs    fish           external
+   usr time    2.75 secs    0.25 millis    2.75 secs
+   sys time    0.37 secs    8.49 millis    0.36 secs
+```
+
 ## Streaming
 
-TODO
+There's a major issue with our implementation -- it's not memory safe. Rather, its memory usage is proportional to the size of the input. One way to show this is catting an infinite input to standard in, using a small heap size to make it fail quickly:
 
-TODO: Why the `BitVector` variants though? `BitVector` supports *suspended construction* -- i.e., constructing the vector as it is traversed instead of constructing it all at once. Operations like `BitVector.fromInputStream` take advantage of this to avoid loading the entire input. However, when a `BitVector` is converted to a `ByteVector`, the suspensions are forced, resulting in all data being loaded in to memory. By implementing the main algorithm in terms of `BitVector`, we avoid forcing the entire computation.
+```
+cat /dev/random | scala-cli run -J -Xmx32m hexdump4s.sc
+```
+
+We're using `BitVector.fromInputStream`, which supports **suspended construction** -- constructing the vector as it is traversed instead of constructing it all at once. However, we have to take care to ensure that we don't hold on to a reference to the initial vector while traversing it. Otherwise, the reference to the initial vector keeps all of the visited bytes in memory.
+
+The `HexDumpFormat` class in scodec-bits has overloads of `render` and `print` which take a `=> BitVector` -- a by-name bit vector. These exist for two reasons -- first, converting a `BitVector` to a `ByteVector` forces all suspended computations to be run and the resulting bytes are contiguously allocated to a single compact array. So it's important that we don't convert the input `BitVector` to a `ByteVector`. Second, if `print` and `render` took their `BitVector` arguments as regular parameters instead of by-name, then we risk those intermediate functions holding on to the root `BitVector`.
+
+The internal implementation of `render` has to be changed to avoid capturing a reference to the original `BitVector` as well. The main algorithm must be changed from using `ByteVector` to `BitVector` (to avoid forcing the entire input) and iteration needs to be changed from using `bits.grouped(bits).zipWithIndex` to a tail recursive loop:
+
+```scala
+def render(bits: => BitVector, onLine: String => Unit): Unit =
+  render(bits, 0L, onLine)
+
+@annotation.tailrec
+private def render(bits: BitVector, position: Long, onLine: String => Unit): Unit = {
+  val takeFullLine = position + numBytesPerLine <= lengthLimit
+  val bitsToTake = if (takeFullLine) numBitsPerLine else (lengthLimit - position) * 8L
+  if (bits.nonEmpty && bitsToTake > 0L) {
+    val bitsInLine = bits.take(bitsToTake)
+    val line = renderLine(bitsInLine.bytes, (addressOffset + position).toInt)
+    onLine(line)
+    if (takeFullLine)
+      render(bits.drop(numBitsPerLine), position + bitsInLine.size / 8, onLine)
+  }
+}
+```
+
+This tail recursive loop ensures that each iteration only sees the remainder of the input -- we never hold on to the original vector, and hence it's free for garbage collection.
+
+Given this implementation, we can adjust `hexdump4s.sc` to run in constant memory simply by changing our `data` value from a `val` to a `def`:
+
+```scala
+def data = {
+  val source = BitVector.fromInputStream(
+    file.map(f => Files.newInputStream(f)).getOrElse(System.in))
+  source.drop(offset * 8L)
+}
+HexDumpFormat.Default
+  .withAnsi(!noColor)
+  .withAddressOffset(offset.toInt)
+  .withLengthLimit(limit.getOrElse(Long.MaxValue))
+  .print(data)
+```
+
+If `data` is defined as a `val`, then it's stored on the stack and resultantly prevents garbage collection of the bits that have already been processed by `print`. By declaring it as a `def` instead, the by-name value is passed along all the way to the `render` function we looked at above, where we're then careful to ensure each iteration only references the remainder.
+
+Note we also had to change how we implemented limiting the number of bytes of output -- instead of using `take` on the input, which forces suspended computations, we use `withLengthLimit` on `HexDumpFormat`. We're losing some compositionality here. We had to make `print` (and `render`) explicitly support early termination instead of expressing that as a limit on our input.
+
+This type of streaming computation is very difficult to work with -- it's hard to reason about and hard to get right without lots of testing. And we'd like to maintain compositionality of our APIs. Thankfully, the [fs2](https://fs2.io) library lets us address these issues. Instead of relying on `BitVector.fromInputStream`, we can use fs2's support for reading from files and standard input.
+
+The main ideas behind the fs2 version are:
+- get the input as a `fs2.Stream[IO, Byte]`
+- implement `--length` via `take` on `Stream`
+- paginate the input in to individual `ByteVector`s with size evenly divisible by 16 (until the last, which can be any size)
+- dump each vector individually, tracking the address
+
+One advantage of this approach is that we can start reading the file from the specified offset using fs2's `readRange` method -- as opposed to opening the file at the start and seeking (via `drop`) to the specified offset.
+
+The `paginate` method is the trickiest part, where buffer input bytes in to output vectors with size evenly divisible by 16. It's a very common technique when working with fs2 though, so once you get used to recursive pulls, this type of function looks very familiar.
+
+The `trackAddress` method converts a `Stream[IO, ByteVector]` to a `Stream[IO, (Int, ByteVector)]`, where the first tuple element is the address of the associated `ByteVector` in the input -- the address that should be displayed in the dump output.
+
+```scala
+val data: Stream[IO, Byte] = file match {
+  case None =>
+    fs2.io.stdin[IO](16 * 16).drop(offset)
+  case Some(f) =>
+    Files[IO].readRange(Path(f), 64 * 1024, offset, Long.MaxValue)
+}
+
+def paginate(pageSize: Int)(s: Stream[IO, Byte]): Stream[IO, ByteVector] = {
+  def go(s: Stream[IO, Byte], carry: ByteVector): Pull[IO, ByteVector, Unit] = {
+    s.pull.uncons.flatMap {
+      case Some((hd, tl)) =>
+        val acc = carry ++ hd.toByteVector
+        val mod = acc.size % pageSize
+        Pull.output1(acc.dropRight(mod)) >> go(tl, acc.takeRight(mod))
+      case None => Pull.output1(carry)
+    }
+  }
+  go(s, ByteVector.empty).stream
+}
+
+def trackAddress(bs: Stream[IO, ByteVector]): Stream[IO, (Int, ByteVector)] =
+  bs.mapAccumulate(offset)((address, b) => (address + b.size, b))
+    .map { case (address, b) => ((address - b.size).toInt, b) }
+
+val fmt = HexDumpFormat.Default.withAnsi(!noColor)
+
+data
+  .take(limit)
+  .through(paginate(16))
+  .through(trackAddress)
+  .foreach { case (address, b) =>
+    IO(fmt.withAddressOffset(address.toInt).print(b))
+  }
+  .compile.drain.as(ExitCode.Success)
+```
+
+This implementation is much easier to reason about, and compositionality is preserved. However the elegance comes at a cost. We're now using the `cats.effect.IO` effect type, we're starting a thread pool at runtime, and we've picked up a bunch of transitive dependencies.
+
+## Scala.js and Node.js
+
+One immediate result of the cats-effect and fs2 dependencies is that we no longer can compile for Scala Native. All's not lost though -- fs2 supports Scala.js and Node.js, and in particular, the `fs2.io` package supports a single API that works on both the JVM and Node.js.
+
+We can compile the fs2 based version of `hexdump4s` for Node.js:
+
+```
+> scala-cli package --js --js-module-kind commonjs hexdump4s.scala -f
+Compiling project (Scala 2.13.8, Scala.js)
+Compiled project (Scala 2.13.8, Scala.js)
+Wrote /Users/mpilquist/Development/oss/hexdump4s/hexdump4s.js, run it with
+  node ./hexdump4s.js
+```
+
+## Wrap-up
+
+Overall, `hexdump4s` was super fun to build and write about. Powerful, compositional APIs combined with an interactive evaluation environment like a REPL or workbook makes exploration easy. At the same time, we sometimes let composition take too much of the focus, and fail to encapsulate functionality that's easy to build on demand. When we do take such time, we often find a rich set problems to work on that were hiding just beneath the surface.
+
+## Acknowledgements
+
+In this article, we used a variety of technology spanning many different parts of the Scala community and building on the work of hundreds of individuals. Special thanks to @armanbilge, who without his work tirelessly integrating Scala.js and Scala Native with established libraries, this article would not have been possible. Also special thanks to @velvetbaldmime for encouraging me to write about simple problems.

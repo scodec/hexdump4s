@@ -54,13 +54,16 @@ object hexdump4s extends IOApp {
           go(s, ByteVector.empty).stream
         }
 
+        def trackAddress(bs: Stream[IO, ByteVector]): Stream[IO, (Int, ByteVector)] =
+          bs.mapAccumulate(offset)((address, b) => (address + b.size, b))
+            .map { case (address, b) => ((address - b.size).toInt, b) }
+
         val fmt = HexDumpFormat.Default.withAnsi(!noColor)
 
         data
           .take(limit)
           .through(paginate(16))
-          .mapAccumulate(offset)((address, b) => (address + b.size, b))
-          .map { case (address, b) => (address - b.size, b) }
+          .through(trackAddress)
           .foreach { case (address, b) =>
             IO(fmt.withAddressOffset(address.toInt).print(b))
           }

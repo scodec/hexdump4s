@@ -159,7 +159,7 @@ def constantString(s: String): Codec[Unit] =
   utf8_32.unit(s)
 
 val helloWorld = constantString("Hello, world!")
-// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@5536542e
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@77a27356
 
 println(helloWorld.encode(()))
 // Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
@@ -180,7 +180,7 @@ We can combine this with `constantString` to build a codec for `Point`:
 ```scala
 val pointCodec =
   constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
-// pointCodec: Codec[Point] = scodec.Codec$$anon$2@77a27356
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@73c21b13
 
 println(pointCodec.decode(bytesPoint.bits))
 // Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
@@ -207,11 +207,11 @@ Before each of the points, there's a `0xfb` character, and there's no appearance
 ```scala
 val pointElidedCodec =
   constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
-// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@73c21b13
+// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@66e6e5e9
 
 val lineCodec =
   constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
-// lineCodec: Codec[Line] = scodec.Codec$$anon$2@66e6e5e9
+// lineCodec: Codec[Line] = scodec.Codec$$anon$2@1964a3f
 
 println(lineCodec.decode(bytes.bits))
 // Successful(DecodeResult(Line(Point(1,2,3),Point(4,5,6)),BitVector(empty)))
@@ -244,7 +244,7 @@ Here we see the expected `myPackage.State` string, followed by an elided type ta
 
 ```scala
 val stateCodec = constantString("mypackage.State") ~> constant(0xfb) ~> vectorOfN(int32, lineCodec)
-// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@1964a3f
+// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@654ab198
 
 println(stateCodec.decode(bytesState.bits))
 // Successful(DecodeResult(Vector(Line(Point(1,2,3),Point(4,5,6)), Line(Point(7,8,9),Point(10,11,12))),BitVector(empty)))
@@ -670,6 +670,7 @@ Executed in  165.33 millis    fish           external
    sys time   26.04 millis    6.17 millis   19.87 millis
 ```
 
+This will come in handy later though, so let's keep it in mind!
 
 ## Streaming
 
@@ -801,10 +802,18 @@ Executed in  427.55 millis    fish           external
    sys time   55.31 millis    7.62 millis   47.69 millis
 ```
 
-Alternatively, we can build the JVM version using GraalVM Native Image:
+Alternatively, we can use GraalVM Native Image like we did earlier:
 
 ```
 scala-cli package --native-image hexdump4s.scala -f -- --no-fallback
+...
+Produced artifacts:
+ /Users/mpilquist/Development/oss/hexdump4s/hexdump4s (executable)
+ /Users/mpilquist/Development/oss/hexdump4s/hexdump4s.build_artifacts.txt
+========================================================================================================================
+Finished generating 'hexdump4s' in 1m 51s.
+Wrote /Users/mpilquist/Development/oss/hexdump4s/hexdump4s, run it with
+  ./hexdump4s
 ```
 
 The GraalVM native image version outperforms the Node.js version:
@@ -817,6 +826,8 @@ Executed in  276.56 millis    fish           external
    usr time  245.80 millis    0.21 millis  245.59 millis
    sys time   28.55 millis    6.86 millis   21.69 millis
 ```
+
+A nice benefit of the GraalVM native image solution is that we don't need Scala Native dependencies -- in this case: cats, cats-effect, and fs2!
 
 ## Wrap-up
 

@@ -645,6 +645,7 @@ Executed in  165.33 millis    fish           external
    sys time   26.04 millis    6.17 millis   19.87 millis
 ```
 
+This will come in handy later though, so let's keep it in mind!
 
 ## Streaming
 
@@ -776,10 +777,18 @@ Executed in  427.55 millis    fish           external
    sys time   55.31 millis    7.62 millis   47.69 millis
 ```
 
-Alternatively, we can build the JVM version using GraalVM Native Image:
+Alternatively, we can use GraalVM Native Image like we did earlier:
 
 ```
 scala-cli package --native-image hexdump4s.scala -f -- --no-fallback
+...
+Produced artifacts:
+ /Users/mpilquist/Development/oss/hexdump4s/hexdump4s (executable)
+ /Users/mpilquist/Development/oss/hexdump4s/hexdump4s.build_artifacts.txt
+========================================================================================================================
+Finished generating 'hexdump4s' in 1m 51s.
+Wrote /Users/mpilquist/Development/oss/hexdump4s/hexdump4s, run it with
+  ./hexdump4s
 ```
 
 The GraalVM native image version outperforms the Node.js version:
@@ -792,6 +801,8 @@ Executed in  276.56 millis    fish           external
    usr time  245.80 millis    0.21 millis  245.59 millis
    sys time   28.55 millis    6.86 millis   21.69 millis
 ```
+
+A nice benefit of the GraalVM native image solution is that we don't need Scala Native dependencies -- in this case: cats, cats-effect, and fs2!
 
 ## Wrap-up
 

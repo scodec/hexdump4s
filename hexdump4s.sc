@@ -2,7 +2,8 @@
 //> using lib "org.scodec::scodec-bits::1.1.34"
 //> using lib "com.monovore::decline::2.2.0"
 //
-// Build with: scala-cli package --native hexdump4s.sc -o hexdump4s -f
+// Build Scala Native version with: scala-cli package --native hexdump4s.sc -o hexdump4s -f
+// Build GraalVM native image version with: scala-cli package --native-image hexdump4s.sc -f -- --no-fallback
 //
 import scodec.bits._
 import com.monovore.decline._

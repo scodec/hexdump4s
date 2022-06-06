@@ -577,6 +577,75 @@ Executed in    2.87 secs    fish           external
    sys time    0.37 secs    8.49 millis    0.36 secs
 ```
 
+## GraalVM Native Image
+
+Sören Brunk [pointed out](https://twitter.com/soebrunk/status/1533910605953916929?s=21) that scala-cli has recently gained support for building GraalVM native images thanks to Alex Archambault.
+
+```
+> scala-cli package --native-image hexdump4s.sc -f -- --no-fallback
+
+========================================================================================================================
+GraalVM Native Image: Generating 'hexdump4s' (executable)...
+========================================================================================================================
+[1/7] Initializing...                                                                                   (10.5s @ 0.11GB)
+ Version info: 'GraalVM 22.1.0 Java 17 CE'
+ C compiler: cc (apple, x86_64, 13.1.6)
+ Garbage collector: Serial GC
+ 1 user-provided feature(s)
+  - com.oracle.svm.polyglot.scala.ScalaFeature
+[2/7] Performing analysis...  [******]                                                                  (33.9s @ 1.16GB)
+   4,361 (78.62%) of  5,547 classes reachable
+   4,740 (55.30%) of  8,572 fields reachable
+  19,526 (32.98%) of 59,201 methods reachable
+      28 classes,   113 fields, and   527 methods registered for reflection
+      57 classes,    59 fields, and    51 methods registered for JNI access
+[3/7] Building universe...                                                                               (3.4s @ 1.49GB)
+[4/7] Parsing methods...      [**]                                                                       (2.7s @ 0.79GB)
+[5/7] Inlining methods...     [****]                                                                     (2.8s @ 1.76GB)
+[6/7] Compiling methods...    [*****]                                                                   (30.9s @ 2.12GB)
+[7/7] Creating image...                                                                                  (3.2s @ 2.52GB)
+   6.17MB (36.54%) for code area:   11,275 compilation units
+   9.45MB (55.90%) for image heap:   2,583 classes and 111,831 objects
+   1.28MB ( 7.56%) for other data
+  16.90MB in total
+------------------------------------------------------------------------------------------------------------------------
+Top 10 packages in code area:                               Top 10 object types in image heap:
+ 696.91KB java.util                                            1.90MB byte[] for java.lang.String
+ 386.04KB scala.collection.immutable                           1.28MB byte[] for code metadata
+ 378.69KB java.lang.invoke                                     1.24MB java.lang.Class
+ 356.83KB java.lang                                            1.07MB byte[] for general heap data
+ 277.92KB java.text                                            1.02MB java.lang.String
+ 248.69KB com.monovore.decline                               389.63KB java.util.HashMap$Node
+ 235.74KB java.util.regex                                    340.70KB com.oracle.svm.core.hub.DynamicHubCompanion
+ 204.99KB com.oracle.svm.core.reflect                        201.67KB java.lang.String[]
+ 202.56KB java.util.concurrent                               170.93KB byte[] for reflection metadata
+ 194.33KB com.oracle.svm.jni                                 168.33KB java.util.HashMap$Node[]
+      ... 147 additional packages                                 ... 1036 additional object types
+                                           (use GraalVM Dashboard to see all)
+------------------------------------------------------------------------------------------------------------------------
+                        2.9s (3.1% of total time) in 24 GCs | Peak RSS: 2.46GB | CPU load: 2.89
+------------------------------------------------------------------------------------------------------------------------
+Produced artifacts:
+ /Users/mpilquist/Development/oss/hexdump4s/hexdump4s (executable)
+ /Users/mpilquist/Development/oss/hexdump4s/hexdump4s.build_artifacts.txt
+========================================================================================================================
+Finished generating 'hexdump4s' in 1m 30s.
+Wrote /Users/mpilquist/Development/oss/hexdump4s/hexdump4s, run it with
+  ./hexdump4s
+```
+
+This rivals (though doesn't beat) the startup time of the Scala Native built binary:
+
+```
+> time ./hexdump4s hexdump4s.sc > /dev/null
+
+________________________________________________________
+Executed in  165.33 millis    fish           external
+   usr time  134.62 millis    0.20 millis  134.41 millis
+   sys time   26.04 millis    6.17 millis   19.87 millis
+```
+
+
 ## Streaming
 
 There's a major issue with our implementation -- it's not memory safe. Rather, its memory usage is proportional to the size of the input. One way to show this is catting an infinite input to standard in, using a small heap size to make it fail quickly:
@@ -690,22 +759,38 @@ One immediate result of the cats-effect and fs2 dependencies is that we no longe
 We can compile the fs2 based version of `hexdump4s` for Node.js:
 
 ```
-> scala-cli package --js --js-module-kind commonjs hexdump4s.scala -f
+> scala-cli package --js --js-module-kind commonjs --js-mode release hexdump4s.scala -f
 Compiling project (Scala 2.13.8, Scala.js)
 Compiled project (Scala 2.13.8, Scala.js)
 Wrote /Users/mpilquist/Development/oss/hexdump4s/hexdump4s.js, run it with
   node ./hexdump4s.js
 ```
 
-And the resulting output maintains the fast startup time of the native version: 
+And the resulting output maintains the fast startup time of the native versions: 
 
 ```
 > time node ./hexdump4s.js -- hexdump4s.scala > /dev/null
+________________________________________________________
+Executed in  427.55 millis    fish           external
+   usr time  405.71 millis    0.23 millis  405.48 millis
+   sys time   55.31 millis    7.62 millis   47.69 millis
+```
+
+Alternatively, we can build the JVM version using GraalVM Native Image:
+
+```
+scala-cli package --native-image hexdump4s.scala -f -- --no-fallback
+```
+
+The GraalVM native image version outperforms the Node.js version:
+
+```
+time ./hexdump4s hexdump4s.scala > /dev/null
 
 ________________________________________________________
-Executed in  589.54 millis    fish           external
-   usr time  555.06 millis    0.19 millis  554.87 millis
-   sys time   62.75 millis    6.08 millis   56.66 millis
+Executed in  276.56 millis    fish           external
+   usr time  245.80 millis    0.21 millis  245.59 millis
+   sys time   28.55 millis    6.86 millis   21.69 millis
 ```
 
 ## Wrap-up

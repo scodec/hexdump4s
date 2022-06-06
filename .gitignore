@@ -8,3 +8,4 @@ target
 .metals
 .vscode
 hexdump4s.js
+hexdump4s.build_artifacts.txt

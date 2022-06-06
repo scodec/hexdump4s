@@ -4,6 +4,7 @@
 //> using lib "co.fs2::fs2-io::3.2.7"
 //
 // Run with: scala-cli hexdump4s.scala -- <args>
+// Build GraalVM native image version with: scala-cli package --native-image hexdump4s.scala -f -- --no-fallback
 // Build node.js version with: scala-cli package --js --js-module-kind commonjs hexdump4s.scala -f
 //
 import scodec.bits._

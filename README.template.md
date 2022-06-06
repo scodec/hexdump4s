@@ -332,7 +332,7 @@ def renderLine(bytes: ByteVector, address: Int): String =
     .toString
 
 def renderHex(bldr: StringBuilder, bytes: ByteVector): Unit =
-  bytes.foreachS { b =>
+  bytes.foreach { b =>
     bldr
       .append(alphabet.toChar((b >> 4 & 0x0f).toByte.toInt))
       .append(alphabet.toChar((b & 0x0f).toByte.toInt))
@@ -381,6 +381,67 @@ def renderAsciiBestEffort(bldr: StringBuilder, bytes: ByteVector): Unit =
   val colorized = if ansiEnabled then printable.replaceAll("�", FaintUnmappable) else printable
   bldr.append(colorized)
   ()
+```
+
+How about coloring the hex data? Is there any value to doing so? If we color the hex values based on a color gradient, where the magnitude of difference between two values is represented with a scaled magnitude in color change, then glancing at a colorized hex dump can assist in detecting patterns in the data.
+
+ANSI supports both an [8-bit color palette](https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit) and [24-bit RGB color](https://en.wikipedia.org/wiki/ANSI_escape_code#24-bit), though not all terminals support 24-bit color (e.g. OS X's Terminal.app). For this application, we'll use 24-bit color.
+
+We'll need to modify `renderHex` to output an ANSI escape sequence that sets the foreground color to an RGB value prior to each byte. Then, in `renderLine`, after all the bytes in a line have been printed, we'll need to reset the foreground color to the default via another ANSI escape sequence.
+
+```scala
+object Ansi:
+  val Reset = "\u001b[0m"
+  def foregroundColor(bldr: StringBuilder, rgb: (Int, Int, Int)): Unit = {
+    bldr
+      .append("\u001b[38;2;")
+      .append(rgb._1)
+      .append(";")
+      .append(rgb._2)
+      .append(";")
+      .append(rgb._3)
+      .append("m")
+    ()
+ 
+def renderHex(bldr: StringBuilder, bytes: ByteVector): Unit =
+  bytes.foreach { b =>
+    if ansiEnabled then Ansi.foregroundColor(bldr, rgbForByte(b))
+    bldr
+      .append(alphabet.toChar((b >> 4 & 0x0f).toByte.toInt))
+      .append(alphabet.toChar((b & 0x0f).toByte.toInt))
+      .append(' ')
+    ()
+  }
+
+def rgbForByte(b: Byte): (Int, Int, Int) = ???
+```
+
+How do we define `rgbForByte`? We need a function which maps 0-255 on to a color space, such that close values have close colors and distant values have distant colors. The [Hue, Saturation, Value - HSV](https://en.wikipedia.org/wiki/HSL_and_HSV) color space turns this problem in to a simple linear interpolation of the hue. We pick a fixed saturation and value (based on aesthetic preference) and then interpolate the byte value (0-255) over the domain of the hue (0-360 degrees). ANSI doesn't support HSV color though, so we'll also need a way to [convert an HSV color to the equivalent in RGB](https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB).
+
+```scala
+def rgbForByte(b: Byte): (Int, Int, Int) =
+  val saturation = 0.4
+  val value = 0.75
+  val hue = ((b & 0xff) / 256.0) * 360.0
+  hsvToRgb(hue, saturation, value)
+
+/** Converts specific HSV color to RGB. Hue is in range 0-360 and saturation/value are in range 0-1. */
+def hsvToRgb(hue: Double, saturation: Double, value: Double): (Int, Int, Int) =
+  val c = saturation * value
+  val h = hue / 60
+  val x = c * (1 - (h % 2 - 1).abs)
+  val z = 0d
+  val (r1, g1, b1) = h.toInt match
+    case 0 => (c, x, z)
+    case 1 => (x, c, z)
+    case 2 => (z, c, x)
+    case 3 => (z, x, c)
+    case 4 => (x, z, c)
+    case 5 => (c, z, x)
+  val m = value - c
+  val (r, g, b) = (r1 + m, g1 + m, b1 + m)
+  def scale(v: Double) = (v * 256).toInt
+  (scale(r), scale(g), scale(b))
 ```
 
 ## Building a command line app

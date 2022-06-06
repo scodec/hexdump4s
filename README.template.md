@@ -416,7 +416,7 @@ def renderHex(bldr: StringBuilder, bytes: ByteVector): Unit =
 def rgbForByte(b: Byte): (Int, Int, Int) = ???
 ```
 
-How do we define `rgbForByte`? We need a function which maps 0-255 on to a color space, such that close values have close colors and distant values have distant colors. The [Hue, Saturation, Value - HSV](https://en.wikipedia.org/wiki/HSL_and_HSV) color space turns this problem in to a simple linear interpolation of the hue. We pick a fixed saturation and value (based on aesthetic preference) and then interpolate the byte value (0-255) over the domain of the hue (0-360 degrees). ANSI doesn't support HSV color though, so we'll also need a way to [convert an HSV color to the equivalent in RGB](https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB).
+How do we define `rgbForByte`? We need a function which maps 0-255 on to a color space, such that close values have close colors and distant values have distant colors. The [Hue, Saturation, Value (HSV)](https://en.wikipedia.org/wiki/HSL_and_HSV) color space turns this problem in to a simple linear interpolation of the hue. We pick a fixed saturation and value (based on aesthetic preference) and then interpolate the byte value (0-255) over the domain of the hue (0-360 degrees). ANSI doesn't support HSV color though, so we'll also need a way to [convert an HSV color to the equivalent in RGB](https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB).
 
 ```scala
 def rgbForByte(b: Byte): (Int, Int, Int) =
@@ -453,6 +453,10 @@ ByteVector(0 until 256: _*).printHexDump()
 Produces this output:
 
 ![Colorized output of bytes 0 through 255](images/hexdump-all-bytes.png)
+
+And a colorized version of the pickled version of `State` from earlier renders as:
+
+![Colorized output of pickled State object](images/hexdump-state.png)
 
 ## Building a command line app
 

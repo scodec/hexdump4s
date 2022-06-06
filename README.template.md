@@ -425,7 +425,7 @@ def rgbForByte(b: Byte): (Int, Int, Int) =
   val hue = ((b & 0xff) / 256.0) * 360.0
   hsvToRgb(hue, saturation, value)
 
-/** Converts specific HSV color to RGB. Hue is in range 0-360 and saturation/value are in range 0-1. */
+/** Converts HSV color to RGB. Hue is 0-360, saturation/value are 0-1. */
 def hsvToRgb(hue: Double, saturation: Double, value: Double): (Int, Int, Int) =
   val c = saturation * value
   val h = hue / 60
@@ -443,6 +443,16 @@ def hsvToRgb(hue: Double, saturation: Double, value: Double): (Int, Int, Int) =
   def scale(v: Double) = (v * 256).toInt
   (scale(r), scale(g), scale(b))
 ```
+
+Assuming we've added a method directly to `ByteVector` that prints a hex dump using the default `HexDumpFormat`, and the default format enables ANSI output, running this:
+
+```scala
+ByteVector(0 until 256: _*).printHexDump()
+```
+
+Produces this output:
+
+![Colorized output of bytes 0 through 255](images/hexdump-all-bytes.png)
 
 ## Building a command line app
 

@@ -161,7 +161,7 @@ def constantString(s: String): Codec[Unit] =
   utf8_32.unit(s)
 
 val helloWorld = constantString("Hello, world!")
-// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@29643434
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@68b0b900
 
 println(helloWorld.encode(()))
 // Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
@@ -182,7 +182,7 @@ We can combine this with `constantString` to build a codec for `Point`:
 ```scala
 val pointCodec =
   constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
-// pointCodec: Codec[Point] = scodec.Codec$$anon$2@7b45bee4
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@7fe9be55
 
 println(pointCodec.decode(bytesPoint.bits))
 // Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
@@ -209,11 +209,11 @@ Before each of the points, there's a `0xfb` character, and there's no appearance
 ```scala
 val pointElidedCodec =
   constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
-// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@7c872726
+// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@82a4dce
 
 val lineCodec =
   constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
-// lineCodec: Codec[Line] = scodec.Codec$$anon$2@3ad541a1
+// lineCodec: Codec[Line] = scodec.Codec$$anon$2@7c498cb5
 
 println(lineCodec.decode(bytes.bits))
 // Successful(DecodeResult(Line(Point(1,2,3),Point(4,5,6)),BitVector(empty)))
@@ -246,7 +246,7 @@ Here we see the expected `myPackage.State` string, followed by an elided type ta
 
 ```scala
 val stateCodec = constantString("mypackage.State") ~> constant(0xfb) ~> vectorOfN(int32, lineCodec)
-// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@3298075b
+// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@115c5285
 
 println(stateCodec.decode(bytesState.bits))
 // Successful(DecodeResult(Vector(Line(Point(1,2,3),Point(4,5,6)), Line(Point(7,8,9),Point(10,11,12))),BitVector(empty)))
@@ -450,7 +450,7 @@ def rgbForByte(b: Byte): (Int, Int, Int) =
   val hue = ((b & 0xff) / 256.0) * 360.0
   hsvToRgb(hue, saturation, value)
 
-/** Converts specific HSV color to RGB. Hue is in range 0-360 and saturation/value are in range 0-1. */
+/** Converts HSV color to RGB. Hue is 0-360, saturation/value are 0-1. */
 def hsvToRgb(hue: Double, saturation: Double, value: Double): (Int, Int, Int) =
   val c = saturation * value
   val h = hue / 60
@@ -468,6 +468,16 @@ def hsvToRgb(hue: Double, saturation: Double, value: Double): (Int, Int, Int) =
   def scale(v: Double) = (v * 256).toInt
   (scale(r), scale(g), scale(b))
 ```
+
+Assuming we've added a method directly to `ByteVector` that prints a hex dump using the default `HexDumpFormat`, and the default format enables ANSI output, running this:
+
+```scala
+ByteVector(0 until 256: _*).printHexDump()
+```
+
+Produces this output:
+
+![Colorized output of bytes 0 through 255](images/hexdump-all-bytes.png)
 
 ## Building a command line app
 

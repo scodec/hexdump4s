@@ -1,9 +1,10 @@
 //> using scala "2.13.8"
-//> using lib "org.scodec::scodec-bits::1.1.33"
+//> using lib "org.scodec::scodec-bits::1.1.34"
 //> using lib "com.monovore::decline::2.2.0"
 //> using lib "co.fs2::fs2-io::3.2.7"
 //
 // Run with: scala-cli hexdump4s.scala -- <args>
+// Build node.js version with: scala-cli package --js --js-module-kind commonjs hexdump4s.scala
 //
 import scodec.bits._
 import com.monovore.decline._
@@ -13,6 +14,7 @@ import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all._
 
 object hexdump4s extends IOApp {
+  val MaxSafeLong = 9007199254740991L // For Node.js
 
   def run(args: List[String]) = {
     val command = Command(
@@ -36,7 +38,7 @@ object hexdump4s extends IOApp {
           case None =>
             fs2.io.readInputStream(IO.pure(System.in), 16 * 16).drop(offset)
           case Some(f) =>
-            Files[IO].readRange(Path(f), 64 * 1024, offset, Long.MaxValue)
+            Files[IO].readRange(Path(f), 64 * 1024, offset, MaxSafeLong)
         }
 
         def paginate(pageSize: Int)(s: Stream[IO, Byte]): Stream[IO, ByteVector] = {

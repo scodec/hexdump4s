@@ -161,7 +161,7 @@ def constantString(s: String): Codec[Unit] =
   utf8_32.unit(s)
 
 val helloWorld = constantString("Hello, world!")
-// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@773a506b
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@905467b
 
 println(helloWorld.encode(()))
 // Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
@@ -182,7 +182,7 @@ We can combine this with `constantString` to build a codec for `Point`:
 ```scala
 val pointCodec =
   constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
-// pointCodec: Codec[Point] = scodec.Codec$$anon$2@3578f30f
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@3cfcadb8
 
 println(pointCodec.decode(bytesPoint.bits))
 // Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
@@ -209,11 +209,11 @@ Before each of the points, there's a `0xfb` character, and there's no appearance
 ```scala
 val pointElidedCodec =
   constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
-// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@77ad9c92
+// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@6ddac9ff
 
 val lineCodec =
   constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
-// lineCodec: Codec[Line] = scodec.Codec$$anon$2@50274554
+// lineCodec: Codec[Line] = scodec.Codec$$anon$2@7470d3d1
 
 println(lineCodec.decode(bytes.bits))
 // Successful(DecodeResult(Line(Point(1,2,3),Point(4,5,6)),BitVector(empty)))
@@ -246,7 +246,7 @@ Here we see the expected `myPackage.State` string, followed by an elided type ta
 
 ```scala
 val stateCodec = constantString("mypackage.State") ~> constant(0xfb) ~> vectorOfN(int32, lineCodec)
-// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@75bbfe33
+// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@576575ba
 
 println(stateCodec.decode(bytesState.bits))
 // Successful(DecodeResult(Vector(Line(Point(1,2,3),Point(4,5,6)), Line(Point(7,8,9),Point(10,11,12))),BitVector(empty)))
@@ -485,7 +485,57 @@ And a colorized version of the pickled version of `State` from earlier renders a
 
 ## Building a command line app
 
-TODO
+Now that we have configurable hex dumps, let's build a command line application similar to Linux's `hexdump`. In the tradition established by projects like [http4s](https://http4s.org) & [ip4s](https://github.com/Comcast/ip4s), we'll call this `hexdump4s`.
+
+`hexdump4s` will:
+- dump the contents of a file if a path is specified as an argument
+- dump the contents of stdin if no path argument is specified
+- support customizing the format of the hex dump
+- output ANSI escape sequences but support disabling ANSI as well
+- support skipping to an offset of the input
+- support limiting byte output
+
+We'll use the amazing [decline](https://github.com/bkirwi/decline) library for parsing the command line arguments. Further, we'll write this application as a [scala-cli](https://scala-cli.virtuslab.org) script.
+
+To get started, we'll create `hexdump4s.sc` and setup the Scala version (2.13 currently, as Decline is not yet available for Scala 3) as well as our library dependencies.
+
+```scala
+//> using scala "2.13.8"
+//> using lib "org.scodec::scodec-bits::1.1.34"
+//> using lib "com.monovore::decline::2.2.0"
+import scodec.bits._
+import com.monovore.decline._
+```
+
+Now let's define the user interface of `hexdump4s` by defining a Decline `Command` value, describing our arguments:
+
+```scala
+import java.nio.file.{Files, Path}
+import cats.syntax.all._
+
+val command = Command(
+  name = "hexdump4s",
+  header = "Prints a hex dump of a file"
+) {
+  val offset = Opts.option[Long]("offset", short = "s", metavar = "count",
+    help = "Number of bytes to skip at start of input").withDefault(0L)
+  val length = Opts.option[Long]("length", short = "n", metavar = "count",
+    help = "Number of bytes to dump").orNone
+  val noColor = Opts.flag("no-color", help = "Disables color ouptut").orFalse
+  val file = Opts.argument[Path](metavar = "file").orNone
+  (offset, length, noColor, file).tupled
+}
+
+command.parse(args) match {
+  case Left(help) =>
+    System.err.println(help)
+  case Right((offset, limit, noColor, file)) =>
+    ???
+}
+```
+
+
+
 ## Scala Native
 
 TODO

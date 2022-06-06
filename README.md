@@ -722,6 +722,17 @@ Wrote /Users/mpilquist/Development/oss/hexdump4s/hexdump4s.js, run it with
   node ./hexdump4s.js
 ```
 
+And the resulting output maintains the fast startup time of the native version: 
+
+```
+> time node ./hexdump4s.js -- hexdump4s.scala > /dev/null
+
+________________________________________________________
+Executed in  589.54 millis    fish           external
+   usr time  555.06 millis    0.19 millis  554.87 millis
+   sys time   62.75 millis    6.08 millis   56.66 millis
+```
+
 ## Wrap-up
 
 Overall, `hexdump4s` was super fun to build and write about. Powerful, compositional APIs combined with an interactive evaluation environment like a REPL or workbook makes exploration easy. At the same time, we sometimes let composition take too much of the focus, and fail to encapsulate functionality that's easy to build on demand. When we do take such time, we often find a rich set problems to work on that were hiding just beneath the surface.

@@ -7,3 +7,4 @@ target
 *.swp
 .metals
 .vscode
+hexdump4s.js

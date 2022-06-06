@@ -4,7 +4,7 @@
 //> using lib "co.fs2::fs2-io::3.2.7"
 //
 // Run with: scala-cli hexdump4s.scala -- <args>
-// Build node.js version with: scala-cli package --js --js-module-kind commonjs hexdump4s.scala
+// Build node.js version with: scala-cli package --js --js-module-kind commonjs hexdump4s.scala -f
 //
 import scodec.bits._
 import com.monovore.decline._
@@ -36,7 +36,7 @@ object hexdump4s extends IOApp {
       case Right((offset, limit, noColor, file)) =>
         val data: Stream[IO, Byte] = file match {
           case None =>
-            fs2.io.readInputStream(IO.pure(System.in), 16 * 16).drop(offset)
+            fs2.io.stdin[IO](16 * 16).drop(offset)
           case Some(f) =>
             Files[IO].readRange(Path(f), 64 * 1024, offset, MaxSafeLong)
         }

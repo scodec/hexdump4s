@@ -601,6 +601,35 @@ Executed in    2.30 secs    fish           external
    sys time    0.24 secs    6.70 millis    0.24 secs
 ```
 
+Arman Bilge pointed out that we can optimize the native build by specifying `--native-mode release-full` when building the native image.
+
+```
+> scala-cli package --native hexdump4s.sc -o hexdump4s -f --native-mode release-full
+Compiling project (Scala 2.13.8, Scala Native)
+Warning: 1 deprecation (since 2.13.0); re-run with -deprecation for details
+Compiled project (Scala 2.13.8, Scala Native)
+[info] Linking (4428 ms)
+[info] Discovered 1777 classes and 13326 methods
+[info] Optimizing (release-full mode) (67541 ms)
+[info] Generating intermediate code (13484 ms)
+[info] Produced 1 files
+[info] Compiling to native code (71737 ms)
+[info] Linking native code (immix gc, none lto) (342 ms)
+[info] Total (157658 ms)
+Wrote /Users/mpilquist/Development/oss/hexdump4s/hexdump4s, run it with
+  ./hexdump4s
+```
+
+This roughly doubles the speed:
+
+```
+> time ./hexdump4s hexdump4s.sc > /dev/null
+________________________________________________________
+Executed in   30.04 millis    fish           external
+   usr time   12.18 millis    0.16 millis   12.02 millis
+   sys time   13.68 millis    3.90 millis    9.78 millis
+```
+
 ## GraalVM Native Image
 
 Sören Brunk [pointed out](https://twitter.com/soebrunk/status/1533910605953916929?s=21) that scala-cli has recently gained support for building GraalVM native images thanks to Alex Archambault.

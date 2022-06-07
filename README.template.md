@@ -569,12 +569,11 @@ Executed in   75.82 millis    fish           external
    usr time   31.55 millis    0.23 millis   31.32 millis
    sys time   25.42 millis    8.68 millis   16.74 millis
 
-> time scala-cli run hexdump4s.scala -- hexdump4s.sc > /dev/null
-
+> time scala-cli run hexdump4s.sc -- hexdump4s.sc > /dev/null
 ________________________________________________________
-Executed in    2.87 secs    fish           external
-   usr time    2.75 secs    0.25 millis    2.75 secs
-   sys time    0.37 secs    8.49 millis    0.36 secs
+Executed in    2.30 secs    fish           external
+   usr time    1.83 secs    0.26 millis    1.83 secs
+   sys time    0.24 secs    6.70 millis    0.24 secs
 ```
 
 ## GraalVM Native Image

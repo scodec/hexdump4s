@@ -159,7 +159,7 @@ def constantString(s: String): Codec[Unit] =
   utf8_32.unit(s)
 
 val helloWorld = constantString("Hello, world!")
-// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@77a27356
+// helloWorld: Codec[Unit] = scodec.Codec$$anon$2@5536542e
 
 println(helloWorld.encode(()))
 // Successful(BitVector(136 bits, 0x0000000d48656c6c6f2c20776f726c6421))
@@ -180,7 +180,7 @@ We can combine this with `constantString` to build a codec for `Point`:
 ```scala
 val pointCodec =
   constantString("mypackage.Point") ~> (int32 :: int32 :: int32).as[Point]
-// pointCodec: Codec[Point] = scodec.Codec$$anon$2@73c21b13
+// pointCodec: Codec[Point] = scodec.Codec$$anon$2@77a27356
 
 println(pointCodec.decode(bytesPoint.bits))
 // Successful(DecodeResult(Point(7,8,9),BitVector(empty)))
@@ -207,11 +207,11 @@ Before each of the points, there's a `0xfb` character, and there's no appearance
 ```scala
 val pointElidedCodec =
   constant(0xfb) ~> (int32 :: int32 :: int32).as[Point]
-// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@66e6e5e9
+// pointElidedCodec: Codec[Point] = scodec.Codec$$anon$2@73c21b13
 
 val lineCodec =
   constantString("mypackage.Line") ~> (pointElidedCodec :: pointElidedCodec).as[Line]
-// lineCodec: Codec[Line] = scodec.Codec$$anon$2@1964a3f
+// lineCodec: Codec[Line] = scodec.Codec$$anon$2@66e6e5e9
 
 println(lineCodec.decode(bytes.bits))
 // Successful(DecodeResult(Line(Point(1,2,3),Point(4,5,6)),BitVector(empty)))
@@ -244,7 +244,7 @@ Here we see the expected `myPackage.State` string, followed by an elided type ta
 
 ```scala
 val stateCodec = constantString("mypackage.State") ~> constant(0xfb) ~> vectorOfN(int32, lineCodec)
-// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@654ab198
+// stateCodec: Codec[Vector[Line]] = scodec.Codec$$anon$2@1964a3f
 
 println(stateCodec.decode(bytesState.bits))
 // Successful(DecodeResult(Vector(Line(Point(1,2,3),Point(4,5,6)), Line(Point(7,8,9),Point(10,11,12))),BitVector(empty)))
@@ -594,12 +594,11 @@ Executed in   75.82 millis    fish           external
    usr time   31.55 millis    0.23 millis   31.32 millis
    sys time   25.42 millis    8.68 millis   16.74 millis
 
-> time scala-cli run hexdump4s.scala -- hexdump4s.sc > /dev/null
-
+> time scala-cli run hexdump4s.sc -- hexdump4s.sc > /dev/null
 ________________________________________________________
-Executed in    2.87 secs    fish           external
-   usr time    2.75 secs    0.25 millis    2.75 secs
-   sys time    0.37 secs    8.49 millis    0.36 secs
+Executed in    2.30 secs    fish           external
+   usr time    1.83 secs    0.26 millis    1.83 secs
+   sys time    0.24 secs    6.70 millis    0.24 secs
 ```
 
 ## GraalVM Native Image

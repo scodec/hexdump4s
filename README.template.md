@@ -559,11 +559,10 @@ scala-cli supports compiling scripts with the [Scala Native](https://scala-nativ
 > scala-cli package --native hexdump4s.sc -o hexdump4s -f
 ```
 
-One huge benefit of doing so is improved startup time. Running `hexdump4s` natively versus as a JVM script shows a huge difference:
+One huge benefit of doing so is improved startup time. Running `hexdump4s` natively versus as a JVM script shows the difference:
 
 ```
 > time ./hexdump4s hexdump4s.sc > /dev/null
-
 ________________________________________________________
 Executed in   75.82 millis    fish           external
    usr time   31.55 millis    0.23 millis   31.32 millis
@@ -611,7 +610,6 @@ Sören Brunk [pointed out](https://twitter.com/soebrunk/status/15339106059539169
 
 ```
 > scala-cli package --native-image hexdump4s.sc -f -- --no-fallback
-
 ========================================================================================================================
 GraalVM Native Image: Generating 'hexdump4s' (executable)...
 ========================================================================================================================
@@ -666,7 +664,6 @@ This rivals (though doesn't beat) the startup time of the Scala Native built bin
 
 ```
 > time ./hexdump4s hexdump4s.sc > /dev/null
-
 ________________________________________________________
 Executed in  165.33 millis    fish           external
    usr time  134.62 millis    0.20 millis  134.41 millis
@@ -685,7 +682,7 @@ cat /dev/random | scala-cli run -J -Xmx32m hexdump4s.sc
 
 We're using `BitVector.fromInputStream`, which supports **suspended construction** -- constructing the vector as it is traversed instead of constructing it all at once. However, we have to take care to ensure that we don't hold on to a reference to the initial vector while traversing it. Otherwise, the reference to the initial vector keeps all of the visited bytes in memory.
 
-The `HexDumpFormat` class in scodec-bits has overloads of `render` and `print` which take a `=> BitVector` -- a by-name bit vector. These exist for two reasons -- first, converting a `BitVector` to a `ByteVector` forces all suspended computations to be run and the resulting bytes are contiguously allocated to a single compact array. So it's important that we don't convert the input `BitVector` to a `ByteVector`. Second, if `print` and `render` took their `BitVector` arguments as regular parameters instead of by-name, then we risk those intermediate functions holding on to the root `BitVector`.
+The `HexDumpFormat` class in scodec-bits has overloads of `render` and `print` which take a `=> BitVector` -- a by-name bit vector. These exist for two reasons -- first, converting a `BitVector` to a `ByteVector` forces all suspended computations to be run and the resulting bytes to be contiguously allocated to a single compact array. So it's important that we don't convert the input `BitVector` to a `ByteVector`. Second, if `print` and `render` took their `BitVector` arguments as regular parameters instead of by-name, then we risk those intermediate functions holding on to the root `BitVector`.
 
 The internal implementation of `render` has to be changed to avoid capturing a reference to the original `BitVector` as well. The main algorithm must be changed from using `ByteVector` to `BitVector` (to avoid forcing the entire input) and iteration needs to be changed from using `bits.grouped(bits).zipWithIndex` to a tail recursive loop:
 
@@ -724,9 +721,9 @@ HexDumpFormat.Default
   .print(data)
 ```
 
-If `data` is defined as a `val`, then it's stored on the stack and resultantly prevents garbage collection of the bits that have already been processed by `print`. By declaring it as a `def` instead, the by-name value is passed along all the way to the `render` function we looked at above, where we're then careful to ensure each iteration only references the remainder.
+If `data` is defined as a `val`, then it's stored on the stack and resultantly prevents garbage collection of the bits that have already been processed by `print`. By declaring it as a `def` instead, the by-name value is passed along all the way to the `render` function we looked at above, where we were careful to ensure each iteration only references the remainder.
 
-Note we also had to change how we implemented limiting the number of bytes of output -- instead of using `take` on the input, which forces suspended computations, we use `withLengthLimit` on `HexDumpFormat`. We're losing some compositionality here. We had to make `print` (and `render`) explicitly support early termination instead of expressing that as a limit on our input.
+Note we also had to change how we implemented limiting the number of bytes of output -- instead of using `take` on the input, which forces suspended computations, we used `withLengthLimit` on `HexDumpFormat`. We're losing some compositionality here. We had to make `print` (and `render`) explicitly support early termination instead of expressing that as a limit on our input.
 
 This type of streaming computation is very difficult to work with -- it's hard to reason about and hard to get right without lots of testing. And we'd like to maintain compositionality of our APIs. Thankfully, the [fs2](https://fs2.io) library lets us address these issues. Instead of relying on `BitVector.fromInputStream`, we can use fs2's support for reading from files and standard input.
 

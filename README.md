@@ -735,7 +735,7 @@ The main ideas behind the fs2 version are:
 
 One advantage of this approach is that we can start reading the file from the specified offset using fs2's `readRange` method -- as opposed to opening the file at the start and seeking (via `drop`) to the specified offset.
 
-The `paginate` method is the trickiest part, where buffer input bytes in to output vectors with size evenly divisible by 16. It's a very common technique when working with fs2 though, so once you get used to recursive pulls, this type of function looks very familiar.
+The `paginate` method is the trickiest part, where we buffer input and emit vectors with size evenly divisible by 16, carrying the remainder in the buffer. The implementation uses a very common technique when working with fs2 though -- so called recursive pulls. Once you get used to them, their structure becomes very clear.
 
 The `trackAddress` method converts a `Stream[IO, ByteVector]` to a `Stream[IO, (Int, ByteVector)]`, where the first tuple element is the address of the associated `ByteVector` in the input -- the address that should be displayed in the dump output.
 

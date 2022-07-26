@@ -7,7 +7,7 @@
 // Run with: scala-cli hexdump4s.scala -- <args>
 // Build GraalVM native image version with: scala-cli package --native-image hexdump4s.scala -f -- --no-fallback
 // Build node.js version with: scala-cli package --js --js-module-kind commonjs hexdump4s.scala -f
-// Build Scala Native version with: scala-cli package scala-cli package --native hexdump4s.scala -o hexdump4s -f
+// Build Scala Native version with: scala-cli package --native hexdump4s.scala -o hexdump4s -f
 //
 import scodec.bits._
 import com.monovore.decline._

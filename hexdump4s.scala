@@ -1,11 +1,13 @@
 //> using scala "2.13.8"
 //> using lib "org.scodec::scodec-bits::1.1.34"
 //> using lib "com.monovore::decline::2.2.0"
-//> using lib "co.fs2::fs2-io::3.2.7"
+//> using lib "com.armanbilge::fs2-io::3.2.8-67-20a1dbb-SNAPSHOT"
+//> using repository "https://s01.oss.sonatype.org/content/repositories/snapshots/"
 //
 // Run with: scala-cli hexdump4s.scala -- <args>
 // Build GraalVM native image version with: scala-cli package --native-image hexdump4s.scala -f -- --no-fallback
 // Build node.js version with: scala-cli package --js --js-module-kind commonjs hexdump4s.scala -f
+// Build Scala Native version with: scala-cli package --native hexdump4s.scala -o hexdump4s -f
 //
 import scodec.bits._
 import com.monovore.decline._

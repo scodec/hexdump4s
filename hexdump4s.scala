@@ -1,8 +1,7 @@
-//> using scala "2.13.8"
+//> using scala "3.2.0"
 //> using lib "org.scodec::scodec-bits::1.1.34"
-//> using lib "com.monovore::decline::2.2.0"
-//> using lib "com.armanbilge::fs2-io::3.2.8-67-20a1dbb-SNAPSHOT"
-//> using repository "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+//> using lib "com.monovore::decline::2.3.1"
+//> using lib "co.fs2::fs2-io::3.3.0"
 //
 // Run with: scala-cli hexdump4s.scala -- <args>
 // Build GraalVM native image version with: scala-cli package --native-image hexdump4s.scala -f -- --no-fallback

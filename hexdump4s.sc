@@ -2,6 +2,7 @@
 //> using lib "org.scodec::scodec-bits::1.1.34"
 //> using lib "com.monovore::decline::2.3.1"
 //
+// Build JVM distribution with: scala-cli package hexdump4s.sc -o hexdump4s -f --assembly
 // Build Scala Native version with: scala-cli package --native hexdump4s.sc -o hexdump4s -f
 // Build GraalVM native image version with: scala-cli package --native-image hexdump4s.sc -f -- --no-fallback
 //
@@ -36,3 +37,4 @@ command.parse(args) match
       .withAddressOffset(offset.toInt)
       .withLengthLimit(limit.getOrElse(Long.MaxValue))
       .print(data)
+

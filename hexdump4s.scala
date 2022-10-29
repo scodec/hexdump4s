@@ -27,7 +27,7 @@ object hexdump4s extends IOApp {
         help = "Number of bytes to skip at start of input").withDefault(0L)
       val length = Opts.option[Long]("length", short = "n", metavar = "count",
         help = "Number of bytes to dump").withDefault(Long.MaxValue / 8)
-      val noColor = Opts.flag("no-color", help = "Disables color ouptut").orFalse
+      val noColor = Opts.flag("no-color", help = "Disables color output").orFalse
       val file = Opts.argument[String](metavar = "file").orNone
       (offset, length, noColor, file).tupled
     }

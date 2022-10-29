@@ -519,7 +519,7 @@ val command = Command(
     help = "Number of bytes to skip at start of input").withDefault(0L)
   val length = Opts.option[Long]("length", short = "n", metavar = "count",
     help = "Number of bytes to dump").orNone
-  val noColor = Opts.flag("no-color", help = "Disables color ouptut").orFalse
+  val noColor = Opts.flag("no-color", help = "Disables color output").orFalse
   val file = Opts.argument[Path](metavar = "file").orNone
   (offset, length, noColor, file).tupled
 }
@@ -548,7 +548,7 @@ Options and flags:
     --length <count>, -n <count>
         Number of bytes to dump
     --no-color
-        Disables color ouptut
+        Disables color output
 ```
 
 We're using `scala-cli run` to run the script. The `--` tells scala-cli that what comes after are arguments for the script (as opposed to arguments to `scala-cli`).

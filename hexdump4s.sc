@@ -19,7 +19,7 @@ val command = Command(
     help = "Number of bytes to skip at start of input").withDefault(0L)
   val length = Opts.option[Long]("length", short = "n", metavar = "count",
     help = "Number of bytes to dump").orNone
-  val noColor = Opts.flag("no-color", help = "Disables color ouptut").orFalse
+  val noColor = Opts.flag("no-color", help = "Disables color output").orFalse
   val file = Opts.argument[Path](metavar = "file").orNone
   (offset, length, noColor, file).tupled
 }

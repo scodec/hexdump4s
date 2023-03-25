@@ -1,5 +1,5 @@
-//> using scala "3.2.0"
-//> using lib "org.scodec::scodec-bits::1.1.34"
+//> using scala "3.3.0-RC3"
+//> using lib "org.scodec::scodec-bits::1.1.37"
 //> using lib "com.monovore::decline::2.3.1"
 //
 // Build JVM distribution with: scala-cli package hexdump4s.sc -o hexdump4s -f --assembly
@@ -14,7 +14,7 @@ import cats.syntax.all.*
 val command = Command(
   name = "hexdump4s",
   header = "Prints a hex dump of a file"
-) {
+):
   val offset = Opts.option[Long]("offset", short = "s", metavar = "count",
     help = "Number of bytes to skip at start of input").withDefault(0L)
   val length = Opts.option[Long]("length", short = "n", metavar = "count",
@@ -22,7 +22,6 @@ val command = Command(
   val noColor = Opts.flag("no-color", help = "Disables color output").orFalse
   val file = Opts.argument[Path](metavar = "file").orNone
   (offset, length, noColor, file).tupled
-}
 
 command.parse(args) match
   case Left(help) =>

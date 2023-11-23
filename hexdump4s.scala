@@ -1,19 +1,19 @@
-//> using scala "3.3.0-RC3"
-//> using lib "org.scodec::scodec-bits::1.1.37"
-//> using lib "com.monovore::decline::2.3.1"
-//> using lib "co.fs2::fs2-io::3.6.1"
+//> using scala 3.3.1
+//> using lib org.scodec::scodec-bits::1.1.38
+//> using lib com.monovore::decline::2.4.1
+//> using lib co.fs2::fs2-io::3.9.3
 //
 // Run with: scala-cli hexdump4s.scala -- <args>
 // Build GraalVM native image version with: scala-cli package --native-image hexdump4s.scala -f -- --no-fallback
 // Build node.js version with: scala-cli package --js --js-module-kind commonjs hexdump4s.scala -f
 // Build Scala Native version with: scala-cli package --native hexdump4s.scala -o hexdump4s -f
 //
-import scodec.bits._
-import com.monovore.decline._
+import scodec.bits.*
+import com.monovore.decline.*
 import fs2.{Stream, Pull}
 import fs2.io.file.{Files, Path}
 import cats.effect.{ExitCode, IO, IOApp}
-import cats.syntax.all._
+import cats.syntax.all.*
 
 object hexdump4s extends IOApp:
   val MaxSafeLong = 9007199254740991L // For Node.js

@@ -1,6 +1,6 @@
-//> using scala "3.3.0-RC3"
-//> using lib "org.scodec::scodec-bits::1.1.37"
-//> using lib "com.monovore::decline::2.3.1"
+//> using scala 3.3.1
+//> using lib org.scodec::scodec-bits::1.1.38
+//> using lib com.monovore::decline::2.4.1
 //
 // Build JVM distribution with: scala-cli package hexdump4s.sc -o hexdump4s -f --assembly
 // Build Scala Native version with: scala-cli package --native hexdump4s.sc -o hexdump4s -f
